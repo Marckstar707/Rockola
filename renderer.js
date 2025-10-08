@@ -170,7 +170,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       newDiv.style.color = '#fff';
       newDiv.style.boxShadow = '0 2px 8px rgba(0,120,215,0.10)';
       newDiv.children[0].style.display = 'inline-block';
-      newDiv.scrollIntoView({ block: 'center', behavior });
+      newDiv.scrollIntoView({ block: 'nearest', behavior });
     }
   }
 
@@ -841,10 +841,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       // En modo normal
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        updateSelection((selectedIdx + 1) % songs.length);
+        updateSelection((selectedIdx + 1) % songs.length, e.repeat ? 'auto' : 'smooth');
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        updateSelection((selectedIdx - 1 + songs.length) % songs.length);
+        updateSelection((selectedIdx - 1 + songs.length) % songs.length, e.repeat ? 'auto' : 'smooth');
       } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
         e.preventDefault();
         navigateAlphabetically(e.key === 'ArrowRight' ? 'next' : 'prev');
@@ -976,7 +976,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Redefinir updateSelection para que sea más eficiente
   const originalUpdateSelection = updateSelection;
-  updateSelection = function(newIdx) {
+  updateSelection = function(newIdx, behavior = 'smooth') {
     const oldIdx = selectedIdx;
 
     // Llamar a la función original para actualizar el índice y la vista previa
@@ -995,8 +995,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       div.style.background = 'rgba(0,120,215,0.18)';
       div.style.color = '#1976d2';
       div.style.fontWeight = 'bold';
-      // Usar 'center' para mantener el elemento seleccionado en el medio de la vista
-      div.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      // Usar 'nearest' para un desplazamiento más estable
+      div.scrollIntoView({ block: 'nearest', behavior: behavior });
     }
   };
 
