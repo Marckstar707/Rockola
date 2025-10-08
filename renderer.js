@@ -90,6 +90,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let songDivs = [];
   let audioPreviewTimeout = null;
   let videoPreviewTimeout = null; // Nuevo timeout para el video
+  let fadeOutInterval = null;
   let queue = [];
   let isPlaying = false;
   let isFullscreen = false;
@@ -631,15 +632,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     const videoPreview = document.getElementById('video-preview');
     const audioPreview = document.getElementById('audio-preview');
     stopVisualizer();
-    // Ocultar el título si hay preview activo
+    
     if (song.type === 'video' || song.type === 'audio') {
       previewTitle.style.display = 'none';
     } else {
       previewTitle.style.display = 'block';
       previewTitle.textContent = song.title;
     }
+
+    // Limpiar timeouts y detener medios anteriores
     clearTimeout(audioPreviewTimeout);
     clearTimeout(videoPreviewTimeout);
+    if (fadeOutInterval) clearInterval(fadeOutInterval);
     videoPreview.pause();
     audioPreview.pause();
     videoPreview.currentTime = 0;
@@ -647,19 +651,55 @@ document.addEventListener('DOMContentLoaded', async () => {
     videoPreview.style.display = 'none';
     audioPreview.style.display = 'none';
     videoPreview.volume = 1;
+    videoPreview.muted = false;
     audioPreview.volume = 1;
+
+    function audioFadeOut(mediaElement) {
+      let currentVolume = mediaElement.volume;
+      fadeOutInterval = setInterval(() => {
+        if (currentVolume > 0.05) {
+          currentVolume -= 0.05;
+          mediaElement.volume = Math.max(0, currentVolume);
+        } else {
+          mediaElement.volume = 0;
+          clearInterval(fadeOutInterval);
+        }
+      }, 250);
+    }
+
     if (song.type === 'video') {
       videoPreview.src = song.src;
       videoPreview.style.display = 'block';
       audioPreview.style.display = 'none';
       videoPreview.play();
       startVisualizer(videoPreview);
+
+      // Iniciar desvanecimiento de audio a los 15 segundos
+      audioPreviewTimeout = setTimeout(() => {
+        audioFadeOut(videoPreview);
+      }, 15000);
+
+      // Avanzar a la siguiente canción después de 35 segundos
+      videoPreviewTimeout = setTimeout(() => {
+        updateSelection((idx + 1) % songs.length);
+      }, 35000);
+
     } else if (song.type === 'audio') {
       audioPreview.src = song.src;
       audioPreview.style.display = 'block';
       videoPreview.style.display = 'none';
       audioPreview.play();
       startVisualizer(audioPreview);
+
+      // Iniciar desvanecimiento a los 15 segundos
+      audioPreviewTimeout = setTimeout(() => {
+        audioFadeOut(audioPreview);
+      }, 15000);
+
+      // Avanzar a la siguiente canción después de 20 segundos
+      videoPreviewTimeout = setTimeout(() => {
+        updateSelection((idx + 1) % songs.length);
+      }, 20000);
     }
   }
 
