@@ -94,7 +94,104 @@ document.addEventListener('DOMContentLoaded', async () => {
   let isPlaying = false;
   let isFullscreen = false;
   let fullscreenSelectedIdx = 0;
+  let fullscreenSongDivs = []; // Array para los divs de canciones en pantalla completa
   let autoHideTimeout = null;
+
+  function renderFullscreenSongList() {
+    const list = document.createElement('div');
+    list.style.maxHeight = '30vh';
+    list.style.overflow = 'hidden';
+    list.style.display = 'flex';
+    list.style.flexDirection = 'column';
+    list.style.alignItems = 'flex-start';
+    list.style.paddingBottom = '0';
+
+    songs.forEach((song, idx) => {
+      const div = document.createElement('div');
+      div.style.padding = '10px 24px';
+      div.style.cursor = 'pointer';
+      div.style.fontSize = '1.1em';
+      div.style.display = 'flex';
+      div.style.alignItems = 'center';
+      div.style.transition = 'background-color 0.2s, color 0.2s, box-shadow 0.2s';
+      div.style.color = '#fff';
+      div.style.margin = '4px 0';
+      div.style.width = '100%';
+      div.style.textAlign = 'left';
+      div.style.paddingLeft = '32px';
+      div.style.borderRadius = '12px';
+      div.style.background = 'rgba(255,255,255,0.07)';
+      div.style.justifyContent = 'flex-start';
+
+      const icon = document.createElement('span');
+      icon.style.fontSize = '1.3em';
+      icon.style.marginRight = '12px';
+      icon.style.display = 'none';
+      icon.textContent = '🎵';
+
+      const title = document.createElement('span');
+      title.textContent = song.title;
+
+      div.appendChild(icon);
+      div.appendChild(title);
+
+      list.appendChild(div);
+      fullscreenSongDivs.push(div);
+    });
+
+    const title = document.createElement('div');
+    title.style.padding = '18px 0 10px 32px';
+    title.style.borderBottom = '1px solid rgba(255, 255, 255, 0.13)';
+    title.style.fontWeight = 'bold';
+    title.style.textAlign = 'left';
+    title.style.paddingLeft = '32px';
+    title.style.color = '#fff';
+    title.style.fontSize = '1.4em';
+    title.innerHTML = 'Selecciona la siguiente canción';
+    fullscreenSelector.appendChild(title);
+    fullscreenSelector.appendChild(list);
+  }
+
+  function updateFullscreenSelection(newIdx) {
+    const oldIdx = fullscreenSelectedIdx;
+    fullscreenSelectedIdx = newIdx;
+
+    if (oldIdx > -1 && fullscreenSongDivs[oldIdx]) {
+      const oldDiv = fullscreenSongDivs[oldIdx];
+      oldDiv.style.background = 'rgba(255,255,255,0.07)';
+      oldDiv.style.color = '#fff';
+      oldDiv.style.boxShadow = 'none';
+      oldDiv.children[0].style.display = 'none';
+    }
+
+    if (fullscreenSongDivs[fullscreenSelectedIdx]) {
+      const newDiv = fullscreenSongDivs[fullscreenSelectedIdx];
+      newDiv.style.background = 'rgba(0, 120, 215, 0.85)';
+      newDiv.style.color = '#fff';
+      newDiv.style.boxShadow = '0 2px 8px rgba(0,120,215,0.10)';
+      newDiv.children[0].style.display = 'inline-block';
+      newDiv.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  }
+
+  function showFullscreenSelector() {
+    if (!isFullscreen) return;
+
+    if (autoHideTimeout) {
+      clearTimeout(autoHideTimeout);
+    }
+
+    updateFullscreenSelection(fullscreenSelectedIdx);
+
+    fullscreenSelector.style.display = 'block';
+    setTimeout(() => { fullscreenSelector.style.opacity = '1'; }, 10);
+
+    autoHideTimeout = setTimeout(() => {
+      hideFullscreenSelector();
+    }, 5000);
+  }
+
+  renderFullscreenSongList();
   let currentAlphabeticalGroup = 0;
   let alphabeticalGroups = [];
   let djMode = false; // Modo DJ activo
@@ -756,12 +853,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (isFullscreen) {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         showFullscreenSelector();
+        let newIdx;
         if (e.key === 'ArrowDown') {
-          fullscreenSelectedIdx = (fullscreenSelectedIdx + 1) % songs.length;
+          newIdx = (fullscreenSelectedIdx + 1) % songs.length;
         } else {
-          fullscreenSelectedIdx = (fullscreenSelectedIdx - 1 + songs.length) % songs.length;
+          newIdx = (fullscreenSelectedIdx - 1 + songs.length) % songs.length;
         }
-        showFullscreenSelector();
+        updateFullscreenSelection(newIdx);
       } else if (e.key === 'Enter') {
         if (fullscreenSelector.style.display !== 'none') {
           addToQueue(fullscreenSelectedIdx);
@@ -788,12 +886,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
         e.stopPropagation();
+        showFullscreenSelector();
+        let newIdx;
         if (e.key === 'ArrowDown') {
-          fullscreenSelectedIdx = (fullscreenSelectedIdx + 1) % songs.length;
+          newIdx = (fullscreenSelectedIdx + 1) % songs.length;
         } else {
-          fullscreenSelectedIdx = (fullscreenSelectedIdx - 1 + songs.length) % songs.length;
+          newIdx = (fullscreenSelectedIdx - 1 + songs.length) % songs.length;
         }
-        showFullscreenSelector(); // Actualizar la vista
+        updateFullscreenSelection(newIdx);
       } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
         e.preventDefault();
         e.stopPropagation();
@@ -918,6 +1018,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const songListDiv = document.getElementById('song-list');
     if (!songListDiv) return;
     songListDiv.innerHTML = '';
+    songDivs = []; // Reset songDivs array
     songs.forEach((song, idx) => {
       const div = document.createElement('div');
       div.className = 'song-list-item';
@@ -927,31 +1028,49 @@ document.addEventListener('DOMContentLoaded', async () => {
       div.style.fontSize = '1.1em';
       div.style.borderRadius = '8px';
       div.style.margin = '2px 0';
-      div.style.transition = 'background 0.2s, color 0.2s';
-      if (idx === selectedIdx) {
-        div.style.background = 'rgba(0,120,215,0.18)';
-        div.style.color = '#1976d2';
-        div.style.fontWeight = 'bold';
-        // Hacer scroll automático siempre al seleccionar
-        setTimeout(() => {
-          div.scrollIntoView({block: 'end', behavior: 'smooth'});
-        }, 0);
-      } else {
-        div.style.background = 'rgba(255,255,255,0.07)';
-        div.style.color = '#fff';
-      }
+      div.style.transition = 'background 0.2s, color 0.2s, font-weight 0.2s';
+      div.style.background = 'rgba(255,255,255,0.07)';
+      div.style.color = '#fff';
+      div.style.fontWeight = 'normal';
       div.onclick = () => {
         updateSelection(idx);
       };
       songListDiv.appendChild(div);
+      songDivs.push(div);
     });
   }
-  // Llamar a renderSongList() en updateSelection y al volver al menú principal
+
+  // Llamar a renderSongList() al iniciar para poblar songDivs
+  renderSongList();
+
+  // Redefinir updateSelection para que sea más eficiente
   const originalUpdateSelection = updateSelection;
   updateSelection = function(newIdx) {
+    const oldIdx = selectedIdx;
+
+    // Llamar a la función original para actualizar el índice y la vista previa
     originalUpdateSelection.call(this, newIdx);
-    renderSongList();
+
+    // Anular la selección del elemento anterior
+    if (oldIdx > -1 && songDivs[oldIdx]) {
+      songDivs[oldIdx].style.background = 'rgba(255,255,255,0.07)';
+      songDivs[oldIdx].style.color = '#fff';
+      songDivs[oldIdx].style.fontWeight = 'normal';
+    }
+
+    // Seleccionar el nuevo elemento
+    if (songDivs[selectedIdx]) {
+      const div = songDivs[selectedIdx];
+      div.style.background = 'rgba(0,120,215,0.18)';
+      div.style.color = '#1976d2';
+      div.style.fontWeight = 'bold';
+      // Usar 'center' para mantener el elemento seleccionado en el medio de la vista
+      div.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
   };
-  // Llamar a renderSongList() al iniciar
-  renderSongList();
+
+  // Hacer la llamada inicial aquí con la versión correcta de updateSelection.
+  if (songs.length > 0) {
+    updateSelection(0);
+  }
 }); 
