@@ -573,7 +573,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const canvas = document.getElementById('audio-visualizer');
     if (!canvas) return;
     canvas.width = window.innerWidth;
-    canvas.height = 80;
+    canvas.height = 140;
     canvas.style.display = 'block';
     const ctx = canvas.getContext('2d');
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -616,7 +616,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.addEventListener('resize', resizeVisualizer, false);
     function resizeVisualizer() {
       canvas.width = window.innerWidth;
-      canvas.height = 80;
+      canvas.height = 140;
     }
   }
   function stopVisualizer() {
