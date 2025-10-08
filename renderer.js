@@ -152,7 +152,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     fullscreenSelector.appendChild(list);
   }
 
-  function updateFullscreenSelection(newIdx) {
+  function updateFullscreenSelection(newIdx, behavior = 'smooth') {
     const oldIdx = fullscreenSelectedIdx;
     fullscreenSelectedIdx = newIdx;
 
@@ -170,7 +170,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       newDiv.style.color = '#fff';
       newDiv.style.boxShadow = '0 2px 8px rgba(0,120,215,0.10)';
       newDiv.children[0].style.display = 'inline-block';
-      newDiv.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      newDiv.scrollIntoView({ block: 'center', behavior });
     }
   }
 
@@ -180,8 +180,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (autoHideTimeout) {
       clearTimeout(autoHideTimeout);
     }
-
-    updateFullscreenSelection(fullscreenSelectedIdx);
 
     fullscreenSelector.style.display = 'block';
     setTimeout(() => { fullscreenSelector.style.opacity = '1'; }, 10);
@@ -267,8 +265,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     if (firstSongInGroup !== -1) {
       if (isFullscreen) {
-        fullscreenSelectedIdx = firstSongInGroup;
         showFullscreenSelector();
+        updateFullscreenSelection(firstSongInGroup, 'auto');
       } else {
         updateSelection(firstSongInGroup);
       }
@@ -292,77 +290,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   function updateSelection(newIdx) {
     selectedIdx = newIdx;
     previewSong(selectedIdx);
-  }
-
-  function showFullscreenSelector() {
-    if (!isFullscreen) return;
-    
-    // Limpiar timeout anterior si existe
-    if (autoHideTimeout) {
-      clearTimeout(autoHideTimeout);
-    }
-    
-    fullscreenSelector.innerHTML = '';
-    const title = document.createElement('div');
-    title.style.padding = '18px 0 10px 32px';
-    title.style.borderBottom = '1px solid rgba(255, 255, 255, 0.13)';
-    title.style.fontWeight = 'bold';
-    title.style.textAlign = 'left';
-    title.style.paddingLeft = '32px';
-    title.style.color = '#fff';
-    title.style.fontSize = '1.4em';
-    title.innerHTML = 'Selecciona la siguiente canción';
-    fullscreenSelector.appendChild(title);
-
-    const list = document.createElement('div');
-    list.style.maxHeight = '30vh';
-    list.style.overflow = 'hidden';
-    list.style.display = 'flex';
-    list.style.flexDirection = 'column';
-    list.style.alignItems = 'flex-start';
-    list.style.paddingBottom = '0';
-    fullscreenSelector.appendChild(list);
-
-    songs.forEach((song, idx) => {
-      const div = document.createElement('div');
-      div.style.padding = '10px 24px';
-      div.style.cursor = 'pointer';
-      div.style.fontSize = '1.1em';
-      div.style.display = 'flex';
-      div.style.alignItems = 'center';
-      div.style.transition = 'background-color 0.2s, color 0.2s, box-shadow 0.2s';
-      div.style.color = '#fff';
-      div.style.margin = '4px 0';
-      div.style.width = '100%';
-      div.style.textAlign = 'left';
-      div.style.paddingLeft = '32px';
-      div.style.borderRadius = '12px';
-      div.style.boxShadow = idx === fullscreenSelectedIdx ? '0 2px 8px rgba(0,120,215,0.10)' : 'none';
-      div.innerHTML = (idx === fullscreenSelectedIdx ? '<span style="font-size:1.3em;margin-right:12px;">🎵</span>' : '<span style="width:1.3em;display:inline-block;"></span>') + song.title;
-      if (idx === fullscreenSelectedIdx) {
-        div.style.background = 'rgba(0, 120, 215, 0.85)';
-        div.style.color = '#fff';
-      } else {
-        div.style.background = 'rgba(255,255,255,0.07)';
-      }
-      div.style.justifyContent = 'flex-start';
-      list.appendChild(div);
-    });
-
-    fullscreenSelector.style.display = 'block';
-    setTimeout(() => { fullscreenSelector.style.opacity = '1'; }, 10);
-
-    // Scroll automático al seleccionado
-    setTimeout(() => {
-      const children = list.children;
-      if (children[fullscreenSelectedIdx]) {
-        children[fullscreenSelectedIdx].scrollIntoView({ block: 'center', behavior: 'smooth' });
-      }
-    }, 0);
-
-    autoHideTimeout = setTimeout(() => {
-      hideFullscreenSelector();
-    }, 5000);
   }
 
   function hideFullscreenSelector() {
@@ -749,6 +676,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Flag para saber si ya se saltó a los últimos 15 segundos
   let hasJumpedToDJ = false;
 
+  function resetDJJumpFlag() {
+    hasJumpedToDJ = false;
+  }
+
   function resetToInitialState() {
     queue = [];
     isPlaying = false;
@@ -859,7 +790,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else {
           newIdx = (fullscreenSelectedIdx - 1 + songs.length) % songs.length;
         }
-        updateFullscreenSelection(newIdx);
+        updateFullscreenSelection(newIdx, e.repeat ? 'auto' : 'smooth');
       } else if (e.key === 'Enter') {
         if (fullscreenSelector.style.display !== 'none') {
           addToQueue(fullscreenSelectedIdx);
@@ -893,7 +824,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else {
           newIdx = (fullscreenSelectedIdx - 1 + songs.length) % songs.length;
         }
-        updateFullscreenSelection(newIdx);
+        updateFullscreenSelection(newIdx, e.repeat ? 'auto' : 'smooth');
       } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
         e.preventDefault();
         e.stopPropagation();
@@ -1073,4 +1004,4 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (songs.length > 0) {
     updateSelection(0);
   }
-}); 
+});
