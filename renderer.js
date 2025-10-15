@@ -847,6 +847,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateFullscreenSelection(newIdx, e.repeat ? 'auto' : 'smooth');
       } else if (e.key === 'Enter') {
         if (fullscreenSelector.style.display !== 'none') {
+          playCoinSound();
           addToQueue(fullscreenSelectedIdx);
           hideFullscreenSelector();
         }
@@ -917,6 +918,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         e.preventDefault();
         e.stopPropagation();
         if (fullscreenSelector.style.display !== 'none') {
+          playCoinSound();
           addToQueue(fullscreenSelectedIdx);
           hideFullscreenSelector();
         }
