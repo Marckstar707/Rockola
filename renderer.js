@@ -863,6 +863,36 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Inicializar selección y preview
   if (songs.length > 0) updateSelection(0);
 
+  const dropSounds = [
+    '110.mp3',
+    'Another Level.mp3',
+    'In The miiiix.mp3',
+    'In the Mix.mp3',
+    'one and only.mp3',
+    'This Fire.mp3',
+    'Trumpet.mp3',
+    'You Know What it is.mp3'
+  ];
+
+  function playCoinSound() {
+    const coinSound = new Audio('C:/Rockola_2025/coin/dropping-single-coin-on-floor-3-96048.mp3');
+    coinSound.volume = 1.0;
+    coinSound.play();
+  }
+
+  function playCoinDropSequence(idx) {
+    playCoinSound();
+
+    setTimeout(() => {
+      const randomDrop = dropSounds[Math.floor(Math.random() * dropSounds.length)];
+      const dropSound = new Audio(`C:/Rockola_2025/drops/${randomDrop}`);
+      dropSound.volume = 0.7; // Reduce volume by 30%
+      dropSound.play();
+    }, 1000);
+
+    addToQueue(idx);
+  }
+
   document.addEventListener('keydown', (e) => {
     if (songs.length === 0) return;
     
@@ -904,7 +934,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         navigateAlphabetically(e.key === 'ArrowRight' ? 'next' : 'prev');
       } else if (e.key === 'Enter') {
         e.preventDefault();
-        addToQueue(selectedIdx);
+        playCoinDropSequence(selectedIdx);
       }
     }
 
