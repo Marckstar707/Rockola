@@ -12,8 +12,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   fullscreenVideo.style.position = 'fixed';
   fullscreenVideo.style.top = '0';
   fullscreenVideo.style.left = '0';
-  fullscreenVideo.style.width = '100%';
-  fullscreenVideo.style.height = '100%';
+  fullscreenVideo.style.width = '100vw';
+  fullscreenVideo.style.height = '100vh';
+  fullscreenVideo.style.margin = '0';
+  fullscreenVideo.style.padding = '0';
+  fullscreenVideo.style.objectFit = 'contain';
   fullscreenVideo.style.zIndex = '9999';
   fullscreenVideo.style.display = 'none';
   fullscreenVideo.style.backgroundColor = '#000';
@@ -339,7 +342,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       nextVideo.style.opacity = '0';
       nextVideo.style.transition = 'none'; // Sin transición CSS para evitar cortes
       nextVideo.style.pointerEvents = 'none';
-      nextVideo.style.objectFit = 'cover';
+      nextVideo.style.objectFit = 'contain';
       nextVideo.muted = false;
       nextVideo.autoplay = true;
       nextVideo.loop = false;
@@ -781,7 +784,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (queue.length === 0) {
       isPlaying = false;
       isFullscreen = false;
+      fullscreenVideo.pause();
       fullscreenVideo.style.display = 'none';
+      fullscreenVideo.src = '';
       updateSelection(selectedIdx);
       return;
     }
@@ -792,6 +797,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateQueueDisplay();
 
     // Stop preview
+    clearTimeout(videoPreviewTimeout);
+    clearTimeout(audioPreviewTimeout);
     videoPreview.pause();
     audioPreview.pause();
     videoPreview.style.display = 'none';
