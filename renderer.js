@@ -86,6 +86,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Obtener canciones desde el backend
   const songs = await window.rockola.getSongs();
 
+  // Sanitize song titles
+  songs.forEach(song => {
+    song.title = song.title
+      .toUpperCase()
+      .replace(/[^A-Z0-9\s-]/g, '') // Keep uppercase letters, numbers, spaces, and hyphens
+      .replace(/\s+/g, ' ') // Collapse multiple spaces into one
+      .trim(); // Remove leading/trailing spaces
+  });
+
   let selectedIdx = 0;
   let songDivs = [];
   let audioPreviewTimeout = null;
@@ -571,9 +580,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const sourceNodeMap = new WeakMap();
   function startVisualizer(mediaElement) {
     const canvas = document.getElementById('audio-visualizer');
-    if (!canvas) return;
     canvas.width = window.innerWidth;
-    canvas.height = 140;
     canvas.style.display = 'block';
     const ctx = canvas.getContext('2d');
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -804,7 +811,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         audioPreview.style.display = 'block';
         audioPreview.currentTime = 0;
         audioPreview.play().catch(e => console.log('Error playing audio:', e));
-        
+      
         audioPreview.onended = () => {
             playNextInQueue();
         };
@@ -1044,4 +1051,106 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (songs.length > 0) {
     updateSelection(0);
   }
+
+  function drawAnimatedTitle() {
+    const canvas = document.getElementById('animated-title');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    
+    const text1 = "Video Rockola";
+    const text3 = "2025"; // Removed text2
+
+    let frame = 0;
+    const particles = [];
+
+    canvas.width = 800;
+    canvas.height = 300;
+
+    class Particle {
+      constructor(x, y, color) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.size = Math.random() * 2 + 1;
+        this.velocityX = (Math.random() - 0.5) * 1.5;
+        this.velocityY = (Math.random() - 0.5) * 1.5;
+        this.lifespan = 40;
+      }
+      update() {
+        this.x += this.velocityX;
+        this.y += this.velocityY;
+        this.lifespan--;
+      }
+      draw() {
+        ctx.globalAlpha = this.lifespan / 40;
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1.0;
+      }
+    }
+
+    function createParticles(x, y, color) {
+      for (let i = 0; i < 2; i++) {
+        particles.push(new Particle(x, y, color));
+      }
+    }
+
+    function animate() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      frame++;
+
+      // 1. Handle and Draw all Particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        particles[i].update();
+        particles[i].draw();
+        if (particles[i].lifespan <= 0) {
+          particles.splice(i, 1);
+        }
+      }
+
+      // 2. Draw "Video Rockola" with particles
+      ctx.font = "bold 70px 'Segoe UI', Arial, sans-serif";
+      const text1Width = ctx.measureText(text1).width;
+      let x1 = (canvas.width - text1Width) / 2;
+      for (let i = 0; i < text1.length; i++) {
+        const char = text1[i];
+        const charWidth = ctx.measureText(char).width;
+        const hue = (frame + i * 10) % 360;
+        const color = `hsl(${hue}, 90%, 65%)`;
+        ctx.fillStyle = color;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 10;
+        ctx.fillText(char, x1, 100); // Adjusted Y position
+        if (frame % 10 === 0) {
+          createParticles(x1 + charWidth / 2, 100, color);
+        }
+        x1 += charWidth;
+      }
+
+      // 3. Draw "2025" with Pulsating Glow
+      ctx.font = "bold 140px 'Segoe UI', Arial, sans-serif";
+      const text3Width = ctx.measureText(text3).width;
+      const x3 = (canvas.width - text3Width) / 2;
+      const y3 = 240; // Adjusted Y position
+      const pulse = Math.sin(frame * 0.05) * 10 + 15;
+      const hue2 = frame % 360;
+
+      ctx.fillStyle = 'white';
+      ctx.shadowColor = `hsl(${hue2}, 100%, 50%)`;
+      ctx.shadowBlur = pulse;
+      ctx.fillText(text3, x3, y3);
+      // Draw again for a stronger core glow
+      ctx.shadowBlur = pulse / 2;
+      ctx.fillText(text3, x3, y3);
+
+
+      requestAnimationFrame(animate);
+    }
+
+    animate();
+  }
+
+  drawAnimatedTitle();
 });

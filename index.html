@@ -158,6 +158,14 @@
       border-radius: 10px;
       box-shadow: 0 4px 20px rgba(0,0,0,0.5);
     }
+
+    #video-preview {
+      max-width: 600px;
+    }
+
+    #audio-preview {
+      max-width: 420px;
+    }
     
     /* Scrollbar styling */
     ::-webkit-scrollbar {
@@ -218,10 +226,11 @@
 <body>
   <div id="container" style="background:none; box-shadow:none; border:none;">
     <div id="preview" style="position:relative; width:100vw; height:90vh; min-height:600px;">
+      <canvas id="animated-title" style="position:absolute; top:4vh; left:-7vw; z-index:2;"></canvas>
       <div id="preview-panel" style="position:absolute; top:4vh; right:3vw; display:flex; flex-direction:column; align-items:flex-end; z-index:2; background:none; box-shadow:none;">
         <div id="preview-title">Selecciona una canción</div>
-        <video id="video-preview" style="display:none; width:600px; height:350px; border-radius:16px; box-shadow:0 4px 24px rgba(0,0,0,0.18);"></video>
-        <audio id="audio-preview" style="display:none; width:420px; margin-top:18px;"></audio>
+        <video id="video-preview" style="display:none; border-radius:16px; box-shadow:0 4px 24px rgba(0,0,0,0.18);"></video>
+        <audio id="audio-preview" style="display:none; margin-top:18px;"></audio>
       </div>
       <div style="position:absolute; left:50%; top:50%; transform:translate(-50%,0); z-index:2; width:100%; display:flex; justify-content:center; align-items:flex-start;">
         <div id="song-list" style="width:98vw; max-width:98vw; min-width:0; margin:0; background:none; box-shadow:none; border-radius:0; padding:0; height:40vh; overflow-y:auto;"></div>
