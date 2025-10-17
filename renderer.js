@@ -109,6 +109,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let fullscreenSelectedIdx = 0;
   let fullscreenSongDivs = []; // Array para los divs de canciones en pantalla completa
   let autoHideTimeout = null;
+  let hasPlayedEndDrop = false;
 
   function renderFullscreenSongList() {
     const list = document.createElement('div');
@@ -793,6 +794,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     isPlaying = true;
     isFullscreen = true;
+    hasPlayedEndDrop = false;
     const song = queue.shift();
     updateQueueDisplay();
 
@@ -859,6 +861,23 @@ document.addEventListener('DOMContentLoaded', async () => {
   fullscreenVideo.addEventListener('focus', (e) => {
     e.preventDefault();
     document.body.focus();
+  });
+
+  fullscreenVideo.addEventListener('timeupdate', () => {
+    if (!isPlaying || hasPlayedEndDrop || fullscreenVideo.duration < 4) {
+      return;
+    }
+
+    const remaining = fullscreenVideo.duration - fullscreenVideo.currentTime;
+
+    if (remaining > 0 && remaining <= 4) {
+      hasPlayedEndDrop = true;
+      
+      const randomDrop = dropSounds[Math.floor(Math.random() * dropSounds.length)];
+      const dropSound = new Audio(`C:/Rockola_2025/drops/${randomDrop}`);
+      dropSound.volume = 0.7;
+      dropSound.play();
+    }
   });
 
   // Inicializar selección y preview
