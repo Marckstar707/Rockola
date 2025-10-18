@@ -1,6 +1,59 @@
+const { ipcRenderer } = require('electron');
+
 // Cargar canciones dinámicamente usando la API de preload.js
 
 document.addEventListener('DOMContentLoaded', async () => {
+  const loadingScreen = document.getElementById('loading-screen');
+  const progressBar = document.getElementById('progress-bar');
+  const loadingMessage = document.getElementById('loading-message');
+  const container = document.getElementById('container');
+
+  ipcRenderer.on('selected-folder', async (event, folderPath) => {
+    console.log('Ruta de carpeta recibida en renderer:', folderPath);
+    loadingMessage.textContent = `Escaneando ${folderPath}...`;
+    const { songs, summary } = await window.rockola.getSongs(folderPath);
+    console.log('Canciones recibidas en renderer:', songs);
+    let processed = 0;
+
+    const totalSongs = songs.length;
+    if (totalSongs === 0) {
+      loadingScreen.style.display = 'none';
+      container.style.display = 'flex';
+      if (summary) {
+        showSummaryModal(summary);
+      }
+      return;
+    }
+
+    songs.forEach(song => {
+      // Simulate processing time
+      setTimeout(() => {
+        processed++;
+        const progress = (processed / totalSongs) * 100;
+        progressBar.style.width = `${progress}%`;
+        if (processed === totalSongs) {
+          loadingScreen.style.display = 'none';
+          container.style.display = 'flex';
+          if (summary) {
+            showSummaryModal(summary);
+          }
+          initializeRockola(songs);
+        }
+      }, 0);
+    });
+  });
+
+  function showSummaryModal(summary) {
+    const modal = document.getElementById('summary-modal');
+    const summaryText = document.getElementById('summary-text');
+    summaryText.innerHTML = `Ruta: ${summary.folderPath}<br>Archivos encontrados: ${summary.filesFound}<br>Canciones procesadas: ${summary.songsProcessed}`;
+    modal.style.display = 'flex';
+    setTimeout(() => {
+      modal.style.display = 'none';
+    }, 5000);
+  }
+
+  async function initializeRockola(songs) {
   const previewTitle = document.getElementById('preview-title');
   const videoPreview = document.getElementById('video-preview');
   const audioPreview = document.getElementById('audio-preview');
@@ -86,8 +139,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log('🔢 Contador actualizado - Videos en espera:', videosEnEspera, 'Cola total:', queue.length); // Debug
   }
 
-  // Obtener canciones desde el backend
-  const songs = await window.rockola.getSongs();
+
 
   // Sanitize song titles
   songs.forEach(song => {
@@ -1211,4 +1263,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   drawAnimatedTitle();
+  }
 });

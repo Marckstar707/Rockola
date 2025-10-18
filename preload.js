@@ -3,7 +3,7 @@ const { ipcRenderer } = require('electron');
 
 // Exponer la API directamente en window cuando contextIsolation está deshabilitado
 window.rockola = {
-  getSongs: () => ipcRenderer.invoke('get-songs')
+  getSongs: (folderPath) => ipcRenderer.invoke('get-songs', folderPath)
 };
 
 window.addEventListener('DOMContentLoaded', () => {
