@@ -1,6 +1,28 @@
 const { ipcRenderer } = require('electron');
 const fs = require('fs');
 const path = require('path');
+const { pathToFileURL } = require('url');
+const { remote } = require('electron');
+
+// Helper: busca una ruta de archivo en varias ubicaciones y devuelve URL file:// si existe
+function fileUrlFor(relativeSubPath) {
+  const candidates = [];
+  try { if (process && process.resourcesPath) candidates.push(path.join(process.resourcesPath, relativeSubPath)); } catch (e) {}
+  try { if (process && process.execPath) candidates.push(path.join(path.dirname(process.execPath), relativeSubPath)); } catch (e) {}
+  candidates.push(path.join(process.cwd(), relativeSubPath));
+  candidates.push(path.join(__dirname, '..', relativeSubPath));
+  // ruta legacy
+  candidates.push(path.join('C:', 'Rockola_2025', relativeSubPath));
+
+  for (const c of candidates) {
+    try {
+      if (c && fs.existsSync(c) && fs.statSync(c).isFile()) return pathToFileURL(c).href;
+    } catch (e) {
+      // ignore
+    }
+  }
+  return null;
+}
 
 // Cargar canciones dinámicamente usando la API de preload.js
 
@@ -1076,29 +1098,71 @@ document.addEventListener('DOMContentLoaded', async () => {
       hasPlayedEndDrop = true;
       const chosen = pickRandomDrop();
       if (!chosen) return;
-      const dropSound = new Audio(`C:/Rockola_2025/drops/${chosen}`);
-      dropSound.volume = 0.7;
-      dropSound.play();
+        const url = fileUrlFor(path.join('drops', chosen));
+        if (url) {
+          const dropSound = new Audio(url);
+          dropSound.volume = 0.7;
+          dropSound.play().catch(e => console.warn('Error reproducir drop end:', e));
+        } else {
+          console.warn('No se encontró URL para drop final:', chosen);
+        }
     }
   });
 
   // Inicializar selección y preview
   if (songs.length > 0) updateSelection(0);
 
-  // Cargar drops dinámicamente desde C:\\Rockola_2025\\drops
-  const dropsDir = 'C:/Rockola_2025/drops';
-  let dropSounds = [];
-  try {
-    const entries = fs.readdirSync(dropsDir);
-    const allowed = ['.mp3', '.wav', '.ogg'];
-    dropSounds = entries.filter(f => allowed.includes(path.extname(f).toLowerCase()));
-    if (!dropSounds.length) {
-      console.warn('No se encontraron drops en', dropsDir);
-    } else {
-      console.log('Drops cargados:', dropSounds.length);
+  // Cargar drops dinámicamente - buscar en varias ubicaciones para soportar la app empaquetada
+  const { pathToFileURL } = require('url');
+  const { remote } = require('electron');
+
+  function findDropsDir() {
+    const candidates = [];
+
+    // ruta legacy si el usuario la creó manualmente
+    candidates.push(path.join('C:', 'Rockola_2025', 'drops'));
+
+    // carpeta drops junto al CWD (útil en desarrollo)
+    candidates.push(path.join(process.cwd(), 'drops'));
+
+    // ruta dentro de recursos de la app empaquetada
+    if (process && process.resourcesPath) candidates.push(path.join(process.resourcesPath, 'drops'));
+
+    // carpeta drops en userData (por si la app guarda datos ahí)
+    try {
+      const appPath = (remote && remote.app) ? remote.app.getPath('userData') : null;
+      if (appPath) candidates.push(path.join(appPath, 'drops'));
+    } catch (e) {
+      // ignore
     }
-  } catch (e) {
-    console.error('Error cargando drops desde', dropsDir, e);
+
+    // ruta relativa al directorio del script
+    candidates.push(path.join(__dirname, '..', 'drops'));
+
+    for (const c of candidates) {
+      try {
+        if (c && fs.existsSync(c) && fs.statSync(c).isDirectory()) return c;
+      } catch (e) {
+        // ignore
+      }
+    }
+    return null;
+  }
+
+  const dropsDir = findDropsDir();
+  let dropSounds = [];
+  if (dropsDir) {
+    try {
+      const entries = fs.readdirSync(dropsDir);
+      const allowed = ['.mp3', '.wav', '.ogg'];
+      dropSounds = entries.filter(f => allowed.includes(path.extname(f).toLowerCase()));
+      if (!dropSounds.length) console.warn('No se encontraron drops en', dropsDir);
+      else console.log('Drops cargados desde', dropsDir, '-', dropSounds.length);
+    } catch (e) {
+      console.error('Error cargando drops desde', dropsDir, e);
+    }
+  } else {
+    console.warn('No se encontró ninguna carpeta drops válida. Busqué en varias ubicaciones.');
   }
 
   // Evitar repetir el mismo drop seguido; permitir repetir solo después de 3 distintos
@@ -1115,9 +1179,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function playCoinSound() {
-    const coinSound = new Audio('C:/Rockola_2025/coin/dropping-single-coin-on-floor-3-96048.mp3');
-    coinSound.volume = 1.0;
-    coinSound.play();
+    const url = fileUrlFor(path.join('coin', 'dropping-single-coin-on-floor-3-96048.mp3'));
+    if (url) {
+      const coinSound = new Audio(url);
+      coinSound.volume = 1.0;
+      coinSound.play().catch(e => console.warn('Error reproducir coin:', e));
+    } else {
+      console.warn('No se encontró archivo coin local para reproducir');
+    }
   }
 
   function playCoinDropSequence(idx) {
@@ -1126,7 +1195,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     setTimeout(() => {
       const chosen = pickRandomDrop();
       if (!chosen) return;
-      const dropSound = new Audio(`C:/Rockola_2025/drops/${chosen}`);
+  let abs = dropsDir ? path.join(dropsDir, chosen) : path.join('drops', chosen);
+  // Crear URL segura con file:// para evitar problemas en empaquetado
+  const url = pathToFileURL(abs).href;
+  const dropSound = new Audio(url);
       dropSound.volume = 0.7; // Reduce volume by 30%
       dropSound.play();
     }, 1000);

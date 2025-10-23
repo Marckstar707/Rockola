@@ -5,26 +5,43 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "dist:ia32": "electron-builder --win --ia32"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
-    "electron": "^37.2.0",
+    "electron": "~22.3.27",
     "electron-builder": "^26.0.12"
   },
   "build": {
     "appId": "com.rockola2025.app",
     "productName": "Rockola 2025",
     "win": {
-      "target": "nsis",
+      "target": [
+        { "target": "nsis", "arch": ["ia32"] }
+      ],
+      "artifactName": "${productName} ${version} Setup ${arch}.${ext}",
       "forceCodeSigning": false
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
     }
+    ,
+    "extraResources": [
+      {
+        "from": "drops/",
+        "to": "drops",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "coin/",
+        "to": "coin",
+        "filter": ["**/*"]
+      }
+    ]
   }
 }
