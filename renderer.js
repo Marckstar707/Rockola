@@ -1,4 +1,6 @@
 const { ipcRenderer } = require('electron');
+const fs = require('fs');
+const path = require('path');
 
 // Cargar canciones dinámicamente usando la API de preload.js
 
@@ -11,36 +13,46 @@ document.addEventListener('DOMContentLoaded', async () => {
   ipcRenderer.on('selected-folder', async (event, folderPath) => {
     console.log('Ruta de carpeta recibida en renderer:', folderPath);
     loadingMessage.textContent = `Escaneando ${folderPath}...`;
-    const { songs, summary } = await window.rockola.getSongs(folderPath);
-    console.log('Canciones recibidas en renderer:', songs);
-    let processed = 0;
 
-    const totalSongs = songs.length;
-    if (totalSongs === 0) {
-      loadingScreen.style.display = 'none';
-      container.style.display = 'flex';
-      if (summary) {
-        showSummaryModal(summary);
-      }
-      return;
+    // Escuchar progreso en tiempo real desde el proceso principal
+    const percentEl = document.getElementById('progress-percent');
+    const onScanStart = (e, { total, folderPath }) => {
+      progressBar.style.width = '0%';
+      if (percentEl) percentEl.textContent = '0%';
+      loadingMessage.textContent = `Escaneando ${total} archivos en ${folderPath}...`;
+    };
+    const onScanProgress = (e, { processed, total, progress }) => {
+      const pct = Math.max(0, Math.min(100, Math.floor((progress || (total ? processed / total : 1)) * 100)));
+      progressBar.style.width = `${pct}%`;
+      if (percentEl) percentEl.textContent = `${pct}%`;
+      loadingMessage.textContent = `Escaneando... ${processed}/${total}`;
+    };
+    const onScanComplete = () => {
+      // Mantener manejador por si queremos hacer algo extra
+    };
+
+    ipcRenderer.on('scan-start', onScanStart);
+    ipcRenderer.on('scan-progress', onScanProgress);
+    ipcRenderer.on('scan-complete', onScanComplete);
+
+  const { songs, summary } = await window.rockola.getSongs(folderPath);
+  console.log('Canciones recibidas en renderer:', songs);
+
+  // Forzar visualmente el 100% y dar tiempo a la transición antes de ocultar
+  progressBar.style.width = '100%';
+  if (percentEl) percentEl.textContent = '100%';
+  await new Promise(r => setTimeout(r, 300));
+  loadingScreen.style.display = 'none';
+  container.style.display = 'flex';
+    if (summary) {
+      showSummaryModal(summary);
     }
+    initializeRockola(songs);
 
-    songs.forEach(song => {
-      // Simulate processing time
-      setTimeout(() => {
-        processed++;
-        const progress = (processed / totalSongs) * 100;
-        progressBar.style.width = `${progress}%`;
-        if (processed === totalSongs) {
-          loadingScreen.style.display = 'none';
-          container.style.display = 'flex';
-          if (summary) {
-            showSummaryModal(summary);
-          }
-          initializeRockola(songs);
-        }
-      }, 0);
-    });
+    // Limpiar listeners para evitar duplicados si se selecciona otra carpeta
+    ipcRenderer.removeListener('scan-start', onScanStart);
+    ipcRenderer.removeListener('scan-progress', onScanProgress);
+    ipcRenderer.removeListener('scan-complete', onScanComplete);
   });
 
   function showSummaryModal(summary) {
@@ -56,6 +68,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function initializeRockola(songs) {
   const previewTitle = document.getElementById('preview-title');
   const videoPreview = document.getElementById('video-preview');
+  const videoFrame = document.getElementById('video-frame');
   const audioPreview = document.getElementById('audio-preview');
   const queueList = document.getElementById('queue-list');
   const queueCount = document.getElementById('queue-count');
@@ -78,6 +91,115 @@ document.addEventListener('DOMContentLoaded', async () => {
   fullscreenVideo.disableRemotePlayback = true; // Deshabilitar reproducción remota
   fullscreenVideo.setAttribute('controlsList', 'nodownload nofullscreen noremoteplayback'); // Ocultar botón fullscreen nativo
   document.body.appendChild(fullscreenVideo);
+
+  // Controles custom de fullscreen (barra de progreso que aparece con el mouse)
+  let fsControls, fsSeek, fsTime, fsHideTimer, isScrubbing = false;
+  function formatTime(sec) {
+    if (!isFinite(sec)) return '00:00';
+    const s = Math.floor(sec % 60).toString().padStart(2, '0');
+    const m = Math.floor((sec / 60) % 60).toString().padStart(2, '0');
+    const h = Math.floor(sec / 3600);
+    return h > 0 ? `${h}:${m}:${s}` : `${m}:${s}`;
+  }
+  function createFsControls() {
+    fsControls = document.createElement('div');
+    fsControls.style.position = 'fixed';
+    fsControls.style.left = '50%';
+    fsControls.style.transform = 'translateX(-50%)';
+    fsControls.style.bottom = '5vh';
+    fsControls.style.width = '70vw';
+    fsControls.style.maxWidth = '1100px';
+    fsControls.style.display = 'none';
+    fsControls.style.alignItems = 'center';
+    fsControls.style.gap = '14px';
+    fsControls.style.padding = '12px 16px';
+    fsControls.style.borderRadius = '14px';
+    fsControls.style.background = 'rgba(15,15,15,0.65)';
+    fsControls.style.backdropFilter = 'blur(10px)';
+    fsControls.style.border = '1px solid rgba(255,255,255,0.15)';
+    fsControls.style.boxShadow = '0 6px 20px rgba(0,0,0,0.35)';
+    fsControls.style.zIndex = '11500';
+    fsControls.style.transition = 'opacity 0.25s ease';
+    fsControls.style.opacity = '0';
+
+    fsTime = document.createElement('div');
+    fsTime.style.minWidth = '120px';
+    fsTime.style.fontFamily = 'Segoe UI, Arial, sans-serif';
+    fsTime.style.fontWeight = '600';
+    fsTime.style.fontSize = '14px';
+    fsTime.style.color = '#fff';
+    fsTime.style.textShadow = '0 1px 2px rgba(0,0,0,0.6)';
+    fsTime.textContent = '00:00 / 00:00';
+
+    fsSeek = document.createElement('input');
+    fsSeek.type = 'range';
+    fsSeek.min = '0';
+    fsSeek.max = '1000';
+    fsSeek.value = '0';
+    fsSeek.style.flex = '1';
+    fsSeek.style.cursor = 'pointer';
+    fsSeek.style.webkitAppearance = 'none';
+    fsSeek.style.height = '6px';
+    fsSeek.style.borderRadius = '6px';
+    fsSeek.style.background = 'linear-gradient(90deg, #4ecdc4, #45b7d1)';
+    fsSeek.style.outline = 'none';
+    fsSeek.addEventListener('pointerdown', () => { isScrubbing = true; });
+    fsSeek.addEventListener('pointerup', () => { isScrubbing = false; });
+    fsSeek.addEventListener('change', () => {
+      if (!fullscreenVideo.duration) return;
+      const ratio = Number(fsSeek.value) / 1000;
+      fullscreenVideo.currentTime = ratio * fullscreenVideo.duration;
+    });
+    fsSeek.addEventListener('input', () => {
+      // Seek en vivo mientras arrastra
+      if (!fullscreenVideo.duration) return;
+      const ratio = Number(fsSeek.value) / 1000;
+      fullscreenVideo.currentTime = ratio * fullscreenVideo.duration;
+      fsTime.textContent = `${formatTime(fullscreenVideo.currentTime)} / ${formatTime(fullscreenVideo.duration)}`;
+    });
+
+    fsControls.appendChild(fsTime);
+    fsControls.appendChild(fsSeek);
+    document.body.appendChild(fsControls);
+  }
+  createFsControls();
+
+  function showFsControls() {
+    if (fullscreenVideo.style.display === 'none') return;
+    // No mostrar si el selector de fullscreen está abierto (si existe)
+    const selectorVisible = (typeof fullscreenSelector !== 'undefined') && fullscreenSelector && fullscreenSelector.style && fullscreenSelector.style.display !== 'none';
+    if (selectorVisible) return;
+    fsControls.style.display = 'flex';
+    requestAnimationFrame(() => { fsControls.style.opacity = '1'; });
+    if (fsHideTimer) clearTimeout(fsHideTimer);
+    fsHideTimer = setTimeout(hideFsControls, 5000);
+  }
+  function hideFsControls() {
+    fsControls.style.opacity = '0';
+    setTimeout(() => {
+      fsControls.style.display = 'none';
+    }, 250);
+  }
+
+  // Mostrar barra al mover el mouse durante fullscreen
+  document.addEventListener('mousemove', () => {
+    if (fullscreenVideo.style.display !== 'none') {
+      showFsControls();
+    }
+  });
+
+  // Sincronizar slider y tiempos con el video
+  function syncFsControls() {
+    if (!fullscreenVideo.duration) return;
+    if (!isScrubbing && fsSeek) {
+      fsSeek.value = String(Math.floor((fullscreenVideo.currentTime / fullscreenVideo.duration) * 1000));
+    }
+    if (fsTime) {
+      fsTime.textContent = `${formatTime(fullscreenVideo.currentTime)} / ${formatTime(fullscreenVideo.duration)}`;
+    }
+  }
+  fullscreenVideo.addEventListener('loadedmetadata', syncFsControls);
+  fullscreenVideo.addEventListener('timeupdate', syncFsControls);
 
   // Crear ventana transparente para selección en fullscreen
   const fullscreenSelector = document.createElement('div');
@@ -218,9 +340,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     fullscreenSelector.appendChild(list);
   }
 
-  function updateFullscreenSelection(newIdx, behavior = 'smooth') {
+  function updateFullscreenSelection(newIdx, behavior = 'auto') {
     const oldIdx = fullscreenSelectedIdx;
     fullscreenSelectedIdx = newIdx;
+
+    // Mantener sincronizada la selección principal
+    selectedIdx = newIdx;
 
     if (oldIdx > -1 && fullscreenSongDivs[oldIdx]) {
       const oldDiv = fullscreenSongDivs[oldIdx];
@@ -236,7 +361,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       newDiv.style.color = '#fff';
       newDiv.style.boxShadow = '0 2px 8px rgba(0,120,215,0.10)';
       newDiv.children[0].style.display = 'inline-block';
-      newDiv.scrollIntoView({ block: 'nearest', behavior });
+      newDiv.scrollIntoView({ block: 'nearest', behavior: 'auto' });
     }
   }
 
@@ -249,6 +374,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     fullscreenSelector.style.display = 'block';
     setTimeout(() => { fullscreenSelector.style.opacity = '1'; }, 10);
+
+    // Abrir el selector en la misma posición que el menú principal
+    if (songs.length > 0) {
+      fullscreenSelectedIdx = selectedIdx;
+      updateFullscreenSelection(selectedIdx, 'auto');
+    }
 
     autoHideTimeout = setTimeout(() => {
       hideFullscreenSelector();
@@ -360,7 +491,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function hideFullscreenSelector() {
     fullscreenSelector.style.opacity = '0';
-    setTimeout(() => { fullscreenSelector.style.display = 'none'; }, 300);
+    setTimeout(() => { 
+      fullscreenSelector.style.display = 'none'; 
+      // Limpiar estilos de selección en la lista fullscreen para evitar residuos
+      if (fullscreenSongDivs && fullscreenSongDivs.length) {
+        fullscreenSongDivs.forEach(div => {
+          if (!div) return;
+          div.style.background = 'rgba(255,255,255,0.07)';
+          div.style.color = '#fff';
+          div.style.boxShadow = 'none';
+          if (div.children && div.children[0]) {
+            div.children[0].style.display = 'none';
+          }
+        });
+      }
+    }, 300);
     if (autoHideTimeout) {
       clearTimeout(autoHideTimeout);
       autoHideTimeout = null;
@@ -513,6 +658,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           nextVideo.style.transition = 'none';
           nextVideo.style.volume = '1';
           videoPreview.style.display = 'none';
+          if (videoFrame) { videoFrame.style.display = 'none'; videoFrame.classList.remove('is-playing'); }
           videoPreview.pause();
         }
       }
@@ -707,11 +853,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     clearTimeout(audioPreviewTimeout);
     clearTimeout(videoPreviewTimeout);
     if (fadeOutInterval) clearInterval(fadeOutInterval);
-    videoPreview.pause();
+  videoPreview.pause();
     audioPreview.pause();
-    videoPreview.currentTime = 0;
+  videoPreview.currentTime = 0;
     audioPreview.currentTime = 0;
-    videoPreview.style.display = 'none';
+  if (videoFrame) { videoFrame.style.display = 'none'; videoFrame.classList.remove('is-playing'); }
+  videoPreview.style.display = 'none';
     audioPreview.style.display = 'none';
     videoPreview.volume = 1;
     videoPreview.muted = false;
@@ -732,6 +879,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (song.type === 'video') {
       videoPreview.src = song.src;
+      if (videoFrame) { videoFrame.style.display = 'flex'; videoFrame.classList.add('is-playing'); }
       videoPreview.style.display = 'block';
       audioPreview.style.display = 'none';
       videoPreview.play();
@@ -750,6 +898,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else if (song.type === 'audio') {
       audioPreview.src = song.src;
       audioPreview.style.display = 'block';
+      if (videoFrame) { videoFrame.style.display = 'none'; videoFrame.classList.remove('is-playing'); }
       videoPreview.style.display = 'none';
       audioPreview.play();
       startVisualizer(audioPreview);
@@ -853,9 +1002,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Stop preview
     clearTimeout(videoPreviewTimeout);
     clearTimeout(audioPreviewTimeout);
-    videoPreview.pause();
+  videoPreview.pause();
     audioPreview.pause();
-    videoPreview.style.display = 'none';
+  videoPreview.style.display = 'none';
+  if (videoFrame) { videoFrame.style.display = 'none'; videoFrame.classList.remove('is-playing'); }
     audioPreview.style.display = 'none';
 
     if (song.type === 'video') {
@@ -898,7 +1048,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else {
           newIdx = (fullscreenSelectedIdx - 1 + songs.length) % songs.length;
         }
-        updateFullscreenSelection(newIdx, e.repeat ? 'auto' : 'smooth');
+  updateFullscreenSelection(newIdx, 'auto');
       } else if (e.key === 'Enter') {
         if (fullscreenSelector.style.display !== 'none') {
           playCoinSound();
@@ -924,9 +1074,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (remaining > 0 && remaining <= 4) {
       hasPlayedEndDrop = true;
-      
-      const randomDrop = dropSounds[Math.floor(Math.random() * dropSounds.length)];
-      const dropSound = new Audio(`C:/Rockola_2025/drops/${randomDrop}`);
+      const chosen = pickRandomDrop();
+      if (!chosen) return;
+      const dropSound = new Audio(`C:/Rockola_2025/drops/${chosen}`);
       dropSound.volume = 0.7;
       dropSound.play();
     }
@@ -935,16 +1085,34 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Inicializar selección y preview
   if (songs.length > 0) updateSelection(0);
 
-  const dropSounds = [
-    '110.mp3',
-    'Another Level.mp3',
-    'In The miiiix.mp3',
-    'In the Mix.mp3',
-    'one and only.mp3',
-    'This Fire.mp3',
-    'Trumpet.mp3',
-    'You Know What it is.mp3'
-  ];
+  // Cargar drops dinámicamente desde C:\\Rockola_2025\\drops
+  const dropsDir = 'C:/Rockola_2025/drops';
+  let dropSounds = [];
+  try {
+    const entries = fs.readdirSync(dropsDir);
+    const allowed = ['.mp3', '.wav', '.ogg'];
+    dropSounds = entries.filter(f => allowed.includes(path.extname(f).toLowerCase()));
+    if (!dropSounds.length) {
+      console.warn('No se encontraron drops en', dropsDir);
+    } else {
+      console.log('Drops cargados:', dropSounds.length);
+    }
+  } catch (e) {
+    console.error('Error cargando drops desde', dropsDir, e);
+  }
+
+  // Evitar repetir el mismo drop seguido; permitir repetir solo después de 3 distintos
+  const lastDrops = [];
+  function pickRandomDrop() {
+    if (!dropSounds || dropSounds.length === 0) return null;
+    const avoid = new Set(lastDrops);
+    const candidates = dropSounds.filter(f => !avoid.has(f));
+    const pool = candidates.length > 0 ? candidates : dropSounds; // fallback si hay pocos
+    const choice = pool[Math.floor(Math.random() * pool.length)];
+    lastDrops.push(choice);
+    if (lastDrops.length > 3) lastDrops.shift();
+    return choice;
+  }
 
   function playCoinSound() {
     const coinSound = new Audio('C:/Rockola_2025/coin/dropping-single-coin-on-floor-3-96048.mp3');
@@ -956,8 +1124,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     playCoinSound();
 
     setTimeout(() => {
-      const randomDrop = dropSounds[Math.floor(Math.random() * dropSounds.length)];
-      const dropSound = new Audio(`C:/Rockola_2025/drops/${randomDrop}`);
+      const chosen = pickRandomDrop();
+      if (!chosen) return;
+      const dropSound = new Audio(`C:/Rockola_2025/drops/${chosen}`);
       dropSound.volume = 0.7; // Reduce volume by 30%
       dropSound.play();
     }, 1000);
@@ -980,7 +1149,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else {
           newIdx = (fullscreenSelectedIdx - 1 + songs.length) % songs.length;
         }
-        updateFullscreenSelection(newIdx, e.repeat ? 'auto' : 'smooth');
+  updateFullscreenSelection(newIdx, 'auto');
       } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
         e.preventDefault();
         e.stopPropagation();
@@ -998,10 +1167,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       // En modo normal
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        updateSelection((selectedIdx + 1) % songs.length, e.repeat ? 'auto' : 'smooth');
+  updateSelection((selectedIdx + 1) % songs.length, 'auto');
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        updateSelection((selectedIdx - 1 + songs.length) % songs.length, e.repeat ? 'auto' : 'smooth');
+  updateSelection((selectedIdx - 1 + songs.length) % songs.length, 'auto');
       } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
         e.preventDefault();
         navigateAlphabetically(e.key === 'ArrowRight' ? 'next' : 'prev');
@@ -1079,6 +1248,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           videoPreview.pause();
           videoPreview.currentTime = 0;
           videoPreview.style.display = 'none';
+          if (videoFrame) { videoFrame.style.display = 'none'; videoFrame.classList.remove('is-playing'); }
         }
         resetToInitialState();
         updateSelection(selectedIdx);
@@ -1133,28 +1303,35 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Redefinir updateSelection para que sea más eficiente
   const originalUpdateSelection = updateSelection;
-  updateSelection = function(newIdx, behavior = 'smooth') {
-    const oldIdx = selectedIdx;
-
+  function clearSongListHighlight() {
+    if (!songDivs || songDivs.length === 0) return;
+    for (let i = 0; i < songDivs.length; i++) {
+      const el = songDivs[i];
+      if (!el) continue;
+      el.style.background = 'rgba(255,255,255,0.07)';
+      el.style.color = '#fff';
+      el.style.fontWeight = 'normal';
+    }
+  }
+  updateSelection = function(newIdx, behavior = 'auto') {
     // Llamar a la función original para actualizar el índice y la vista previa
     originalUpdateSelection.call(this, newIdx);
 
-    // Anular la selección del elemento anterior
-    if (oldIdx > -1 && songDivs[oldIdx]) {
-      songDivs[oldIdx].style.background = 'rgba(255,255,255,0.07)';
-      songDivs[oldIdx].style.color = '#fff';
-      songDivs[oldIdx].style.fontWeight = 'normal';
-    }
+    // Limpiar cualquier rastro de selección previa para evitar 'fantasmas'
+    clearSongListHighlight();
 
-    // Seleccionar el nuevo elemento
+    // Seleccionar el nuevo elemento (solo uno)
     if (songDivs[selectedIdx]) {
       const div = songDivs[selectedIdx];
       div.style.background = 'rgba(0,120,215,0.18)';
       div.style.color = '#1976d2';
       div.style.fontWeight = 'bold';
-      // Usar 'nearest' para un desplazamiento más estable
-      div.scrollIntoView({ block: 'nearest', behavior: behavior });
+      // Desplazamiento inmediato sin animación
+      div.scrollIntoView({ block: 'nearest', behavior: 'auto' });
     }
+
+    // Mantener sincronizado el índice del selector fullscreen
+    fullscreenSelectedIdx = selectedIdx;
   };
 
   // Hacer la llamada inicial aquí con la versión correcta de updateSelection.
