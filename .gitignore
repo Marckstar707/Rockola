@@ -13,3 +13,9 @@ Thumbs.db
 
 # Build output (no versionar)
 dist/
+
+# Transcodificaciones/outputs locales (no versionar)
+converted/
+
+# Binarios locales (no versionar)
+vendor/ffmpeg/

@@ -27,3 +27,17 @@ git push
 - Puedes ignorarla también si no quieres subir su contenido pesado (añadiendo `drops/` a `.gitignore`).
 - Formatos sugeridos: `.mp3`, `.wav`, `.ogg`.
 
+## Carpeta `converted` (salida de transcodificación)
+
+- Si la app convierte videos a MP4 u otro formato compatible, es buena práctica guardar los archivos resultantes en `converted/`.
+- Esta carpeta es generada localmente y NO debe subirse al repositorio (ya está listada en `.gitignore`).
+- Ruta típica en Windows:
+  - `C:\\Rockola_2025\\converted`
+
+## `vendor/ffmpeg/` (binarios locales)
+
+- Si incluyes binarios de ffmpeg localmente, colócalos en `vendor/ffmpeg/` y NO los subas al repositorio (ya está listado en `.gitignore`).
+- Alternativas:
+  - Descargar ffmpeg en tiempo de build/deploy.
+  - Usar ffmpeg instalado en el sistema.
+
